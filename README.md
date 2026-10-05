@@ -7,13 +7,16 @@ Modell direkt auf dem eigenen Computer.
 
 ## Download
 
-Die aktuelle Version steht unter **Releases** bereit. Wegen der GitHub-Grenze
-von 2 GiB pro Datei besteht der vollstaendige Download aus zwei Teilen:
+Die aktuelle Version steht unter **Releases** bereit. Fuer eine zuverlaessige
+Uebertragung besteht der vollstaendige Download aus fuenf Teilen:
 
 1. `JobScoutAI-Portable-2.38.0.7z.001`
 2. `JobScoutAI-Portable-2.38.0.7z.002`
+3. `JobScoutAI-Portable-2.38.0.7z.003`
+4. `JobScoutAI-Portable-2.38.0.7z.004`
+5. `JobScoutAI-Portable-2.38.0.7z.005`
 
-Beide Dateien in denselben Ordner herunterladen. Anschliessend die Datei mit
+Alle Dateien in denselben Ordner herunterladen. Anschliessend die Datei mit
 der Endung `.001` mit 7-Zip entpacken und `JobScoutAI.exe` starten.
 
 ## Funktionen
