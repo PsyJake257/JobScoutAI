@@ -203,6 +203,18 @@ cython_debug/
 # Temporary file for partial code execution
 tempCodeRunnerFile.py
 
+# JobScout: never publish local credentials or personal data.
+data/
+.env.*
+!.env.example
+Backups/
+PublicBuild/
+runtime/
+models/
+build_*/
+dist_*/
+!Source/JobScoutAI.spec
+
 # Ruff stuff:
 .ruff_cache/
 
