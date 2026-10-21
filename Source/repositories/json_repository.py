@@ -4,6 +4,8 @@ from pathlib import Path
 import shutil
 from datetime import datetime
 from typing import Iterable
+from copy import deepcopy
+from threading import RLock
 
 from deduplication import DeduplizierungsStatistik, jobs_deduplizieren
 from models import Job, SearchTerm, SearchTermSet, UserProfile
@@ -40,8 +42,15 @@ class JsonJobRepository:
     def __init__(self, datei: Path):
         self.datei = datei
         self.letzte_deduplizierung = DeduplizierungsStatistik()
+        self._cache_stamp = None
+        self._cache_jobs = []
+        self._cache_lock = RLock()
 
     def laden(self) -> list[Job]:
+        with self._cache_lock:
+            return self._laden_mit_cache()
+
+    def _laden_mit_cache(self) -> list[Job]:
         self.datei.parent.mkdir(parents=True, exist_ok=True)
 
         if not self.datei.exists():
@@ -49,9 +58,16 @@ class JsonJobRepository:
             return []
 
         try:
+            stat = self.datei.stat()
+            stamp = (stat.st_mtime_ns, stat.st_size)
+            if stamp == self._cache_stamp:
+                return deepcopy(self._cache_jobs)
             with open(self.datei, "r", encoding="utf-8") as f:
                 daten = json.load(f)
-            return [Job.from_dict(eintrag) for eintrag in daten]
+            jobs = [Job.from_dict(eintrag) for eintrag in daten]
+            self._cache_jobs = jobs
+            self._cache_stamp = stamp
+            return deepcopy(jobs)
         except Exception:
             self.speichern([])
             return []
@@ -113,10 +129,12 @@ class JsonJobRepository:
         return {"ausgefuehrt": True, **marker_daten}
 
     def _atomar_schreiben(self, daten: list[dict]) -> None:
-        temporaer = self.datei.with_suffix(f"{self.datei.suffix}.tmp")
-        with open(temporaer, "w", encoding="utf-8") as f:
-            json.dump(daten, f, indent=4, ensure_ascii=False)
-        temporaer.replace(self.datei)
+        with self._cache_lock:
+            temporaer = self.datei.with_suffix(f"{self.datei.suffix}.tmp")
+            with open(temporaer, "w", encoding="utf-8") as f:
+                json.dump(daten, f, indent=4, ensure_ascii=False)
+            temporaer.replace(self.datei)
+            self._cache_stamp = None
 
 
 class JsonSearchTermRepository:

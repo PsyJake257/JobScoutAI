@@ -1,5 +1,13 @@
 # CHANGELOG
 
+## Version 2.40.2 - Scrollen und Reaktionszeit - 2026-10-21
+
+- Scroll-Ereignisse und Scrollbar-Ziehen werden pro Zeichenintervall gebündelt; keine erzwungene Verarbeitung aller GUI-Leerlaufaufgaben bei jedem Scrollschritt.
+- Scrollregion wird nur bei Größenänderungen aktualisiert. Globale Eingabebindungen und geplante Scroll-Callbacks werden beim Schließen aufgeräumt.
+- Dateiabhaengiger Cache für Stellendaten vermeidet wiederholtes JSON-Lesen; Aufrufer erhalten weiterhin unabhängige Kopien und externe Änderungen werden erkannt.
+- KI-Analyse baut höchstens eine Ergebnisseite gleichzeitig auf. Alle Treffer bleiben über die Seitennavigation erreichbar; Gesamtauswertung umfasst weiterhin alle Treffer.
+- Mehr/Weniger aktualisiert nur die jeweilige Beschreibung statt der ganzen Ansicht. Quellenfilter werden nur in der Bewerbungsverwaltung neu geladen.
+
 ## Version 2.40.1 - Umlaute, Kontrast und KI-Vorschlaege - 2026-10-21
 
 - Die Oberflaeche zeigt deutsche Umlaute und ss als scharfes s an, wo sprachlich erforderlich. Interne Statuswerte, Filter und gespeicherte Daten behalten ihre bisherigen Bezeichnungen.

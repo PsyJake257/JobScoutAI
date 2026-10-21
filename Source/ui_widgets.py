@@ -4,6 +4,7 @@ from customtkinter import *
 import customtkinter as _ctk
 
 from ui_text import anzeigetext
+from scroll_widgets import ResponsiveScrollableFrame as CTkScrollableFrame
 
 
 class _Text:

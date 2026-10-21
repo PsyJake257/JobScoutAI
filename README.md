@@ -2,15 +2,15 @@
 
 Kostenloser Windows-Assistent für Stellensuche, Bewerbungsorganisation und
 lokale KI-Auswertung. Portable App ohne Installation, mit vollständig
-enthaltenem Qwen3-4B-Modell. Public Preview: **2.40.1**.
+enthaltenem Qwen3-4B-Modell. Public Preview: **2.40.2**.
 
 ## Fertige App herunterladen
 
-Unter [Releases](https://github.com/PsyJake257/JobScoutAI/releases/tag/v2.40.1)
+Unter [Releases](https://github.com/PsyJake257/JobScoutAI/releases/tag/v2.40.2)
 beide Dateien herunterladen:
 
-- `JobScoutAI-Portable-2.40.1.7z.001`
-- `JobScoutAI-Portable-2.40.1.7z.002`
+- `JobScoutAI-Portable-2.40.2.7z.001`
+- `JobScoutAI-Portable-2.40.2.7z.002`
 
 Beide im selben Ordner lassen. `.001` mit [7-Zip](https://www.7-zip.org/)
 entpacken; der zweite Teil wird automatisch verwendet. Danach

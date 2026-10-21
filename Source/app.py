@@ -886,6 +886,7 @@ class JobScoutAI:
         self.seiten_untertitel.grid(row=1, column=0, sticky="ew", pady=(2, 0))
 
     def _ansicht_layout_aktualisieren(self):
+        self.liste.cancel_pending_scroll()
         for panel in (
             self.such_panel,
             self.ki_such_panel,
@@ -1285,8 +1286,10 @@ class JobScoutAI:
 
     def zeige_jobs(self):
         self.einleitung_ziele = {}
+        self._beschreibungs_widgets = {}
         self._ansicht_layout_aktualisieren()
-        self._quellen_filter_aktualisieren()
+        if self.ansicht == "bewerbungen":
+            self._quellen_filter_aktualisieren()
         if self.ansicht != "ki_suche":
             self.ki_suchbegriff_hinzufuegen_button = None
             self.ki_neuer_suchbegriff = None
@@ -3131,7 +3134,6 @@ class JobScoutAI:
     def _zeige_ki_zusammenfassung(self):
         jobs = [job for job in self.analyse_jobs if job.hat_ki_daten()]
         self.status.configure(text=self._ki_zusammenfassung_text())
-        self._navigation_aktualisieren(0)
         self._ki_analyse_setup_anzeigen()
 
         if self.ki_laeuft:
@@ -3242,9 +3244,10 @@ class JobScoutAI:
         )
 
         beste_treffer = ki_beste_treffer(jobs)
+        self._navigation_aktualisieren(len(beste_treffer))
         self._ki_abschnitt("Beste Treffer")
         self._ki_treffer_sortierleiste_anzeigen(len(beste_treffer))
-        for job in self.job_service.suchergebnisse_sortieren(beste_treffer, self.analyse_treffer_sortierung):
+        for job in self._jobs_der_seite(self.job_service.suchergebnisse_sortieren(beste_treffer, self.analyse_treffer_sortierung)):
             self._ki_treffer_karte(job)
 
         self._ki_abschnitt("Hinweis zur Datenqualitaet")
@@ -3562,6 +3565,14 @@ class JobScoutAI:
         auswahl.set(self.analyse_treffer_sortierung)
         auswahl.pack(side="right", padx=10, pady=8)
 
+        seitenleiste = ctk.CTkFrame(self.liste, fg_color="transparent")
+        seitenleiste.pack(fill="x", padx=8, pady=(0, 8))
+        ctk.CTkButton(seitenleiste, text="< Zurueck", width=110, command=self.vorherige_seite,
+                      state="normal" if self.aktuelle_seite > 0 else "disabled").pack(side="left")
+        ctk.CTkLabel(seitenleiste, text=f"Seite {self.aktuelle_seite + 1} / {max(1, self._seitenanzahl(anzahl))}").pack(side="left", expand=True)
+        ctk.CTkButton(seitenleiste, text="Weiter >", width=110, command=self.naechste_seite,
+                      state="normal" if self.aktuelle_seite + 1 < self._seitenanzahl(anzahl) else "disabled").pack(side="right")
+
     def _ki_treffer_karte(self, job):
         karte = ctk.CTkFrame(
             self.liste,
@@ -3810,20 +3821,23 @@ class JobScoutAI:
             return
         beschreibung_schluessel = self._beschreibung_schluessel(job)
         aufgeklappt = self.beschreibung_status.ist_aufgeklappt(beschreibung_schluessel)
-        ctk.CTkLabel(
+        label = ctk.CTkLabel(
             karte,
             text=beschreibung_vorschau(job.kurzbeschreibung, aufgeklappt),
             anchor="w",
             justify="left",
             wraplength=900,
-        ).pack(fill="x", padx=12, pady=2)
+        )
+        label.pack(fill="x", padx=12, pady=2)
         if beschreibung_hat_mehr(job.kurzbeschreibung):
-            ctk.CTkButton(
+            button = ctk.CTkButton(
                 karte,
                 text="Weniger anzeigen" if aufgeklappt else "Mehr anzeigen",
                 command=lambda schluessel=beschreibung_schluessel: self.beschreibung_umschalten(schluessel),
                 width=140,
-            ).pack(anchor="w", padx=12, pady=(2, 0))
+            )
+            button.pack(anchor="w", padx=12, pady=(2, 0))
+            self._beschreibungs_widgets.setdefault(beschreibung_schluessel, []).append((label, button, job.kurzbeschreibung))
 
     def _job_aktionen_anzeigen(self, karte, job):
         aktionen = ctk.CTkFrame(karte, fg_color="transparent")
@@ -4224,6 +4238,7 @@ class JobScoutAI:
         canvas = getattr(self.liste, "_parent_canvas", None)
         scrollposition = canvas.yview()[0] if canvas is not None else 0.0
         self.analyse_treffer_sortierung = wert
+        self.aktuelle_seite = 0
         self.zeige_jobs()
         if canvas is not None:
             self.app.after_idle(lambda: canvas.yview_moveto(scrollposition))
@@ -4251,7 +4266,10 @@ class JobScoutAI:
 
     def beschreibung_umschalten(self, schluessel):
         self.beschreibung_status.umschalten(schluessel)
-        self.zeige_jobs()
+        aufgeklappt = self.beschreibung_status.ist_aufgeklappt(schluessel)
+        for label, button, text in self._beschreibungs_widgets.get(schluessel, []):
+            label.configure(text=beschreibung_vorschau(text, aufgeklappt))
+            button.configure(text="Weniger anzeigen" if aufgeklappt else "Mehr anzeigen")
 
     def _feld_label(self, name):
         labels = {
