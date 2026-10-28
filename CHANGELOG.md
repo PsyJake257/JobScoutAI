@@ -1,5 +1,13 @@
 # CHANGELOG
 
+## Version 2.44.0 - Gemma, Top-Kandidaten und Glas-Look - 2026-10-28
+
+- Gemma 4 E2B IT (Q4_K_M) und llama.cpp vollständig enthalten; GPU/Vulkan bevorzugt, CPU-Fallback bei Startproblemen. Hintergrund-Vorwärmen beim Programmstart, ohne das Fenster zu blockieren.
+- Die KI prüft alle ausgewählten Stellen in kleinen Gruppen und bewertet danach bis zu 15 Top-Kandidaten einzeln mit Kurzfazit, konkreten Passungsgründen und offenen Fragen. Bei höchstens 15 Stellen werden alle direkt ausführlich bewertet.
+- Laufender Fortschritt aktualisiert vorhandene Widgets, neue Fazits werden einmal ergänzt. Die Ansicht wird nicht nach jeder Stelle neu aufgebaut. Fehlerhafte Detailantworten erhalten keinen erfundenen Match-Wert.
+- Matte Glasflächen, sanfte Reflexe, schwebende Navigation und kontrastreiche Bedienelemente. Statische, begrenzt gecachte Kanteneffekte ohne Live-Blur beim Scrollen.
+- Lizenzinformationen, Modellherkunft, portable Build-Werkzeuge und Entwicklerhinweise auf Gemma/llama.cpp umgestellt. Downloads werden aus einem frischen Ordner ohne private Daten oder API-Schlüssel erstellt.
+
 ## Version 2.40.2 - Scrollen und Reaktionszeit - 2026-10-21
 
 - Scroll-Ereignisse und Scrollbar-Ziehen werden pro Zeichenintervall gebündelt; keine erzwungene Verarbeitung aller GUI-Leerlaufaufgaben bei jedem Scrollschritt.

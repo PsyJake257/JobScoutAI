@@ -1,0 +1,14 @@
+{
+  "name": "Gemma 4 E2B IT Q4_K_M",
+  "repository": "unsloth/gemma-4-E2B-it-GGUF",
+  "revision": "0314792d7f1f7e229411f620751375812bb9faf2",
+  "file": "gemma-4-E2B-it-Q4_K_M.gguf",
+  "url": "https://huggingface.co/unsloth/gemma-4-E2B-it-GGUF/resolve/0314792d7f1f7e229411f620751375812bb9faf2/gemma-4-E2B-it-Q4_K_M.gguf",
+  "size": 3106738272,
+  "sha256": "740185b21d22ceb83a11c3aa62ad5842ef32c70f6096d756bbee85a1e4ec34b8",
+  "source_relative_path": "test_artifacts/model_comparison_models/gemma4_e2b/gemma-4-E2B-it-Q4_K_M.gguf",
+  "license": "Apache-2.0",
+  "license_file": "GEMMA4_E2B_LICENSE.txt",
+  "license_sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+  "license_source": "https://ai.google.dev/gemma/apache_2"
+}

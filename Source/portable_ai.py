@@ -1,115 +1,144 @@
+"""Bundled offline llama.cpp runtime for Gemma 4 E2B."""
 import json
 import logging
 import os
+from pathlib import Path
+import secrets
+import socket
 import subprocess
 import sys
+import threading
 import time
-from pathlib import Path
-from urllib.error import URLError
-from urllib.request import urlopen
+from urllib.request import Request, urlopen
 
+from config import LOCAL_AI_ANALYSIS_CONTEXT_TOKENS, LOCAL_AI_ANALYSIS_MODEL
 
-PORTABLE_OLLAMA_HOST = "127.0.0.1:11435"
-PORTABLE_OLLAMA_URL = f"http://{PORTABLE_OLLAMA_HOST}"
-PORTABLE_MODEL = "qwen3:4b"
+PORTABLE_MODEL = LOCAL_AI_ANALYSIS_MODEL
+MODEL_FILE = "gemma-4-E2B-it-Q4_K_M.gguf"
 
 
 class PortableAiRuntime:
-    def __init__(self, basis_ordner: Path | None = None):
-        self.basis_ordner = basis_ordner or _basis_ordner()
-        self.runtime_ordner = self.basis_ordner / "runtime" / "ollama"
-        self.ollama_exe = self.runtime_ordner / "ollama.exe"
+    def __init__(self, basis_ordner=None):
+        self.basis_ordner = Path(basis_ordner or (Path(sys.executable).parent if getattr(sys, "frozen", False) else Path(__file__).parent))
         self.model_ordner = self.basis_ordner / "models"
-        self.prozess: subprocess.Popen | None = None
+        self.ollama_exe = self.basis_ordner / "runtime" / "cpu" / "llama-server.exe"
+        self.prozess = None
         self._log_stream = None
+        self.backend = ""
+        self.url = ""
+        self._lock = threading.RLock()
+        self._stop_event = threading.Event()
+        self._warm_client = None
+        self._vorgewaermt = False
+        self.vorwaerm_status = "Noch nicht vorbereitet"
 
-    def starten(self) -> bool:
-        if not self.ollama_exe.is_file() or not self.model_ordner.is_dir():
-            logging.info("Keine eingebettete KI-Laufzeit gefunden; verwende externes Ollama.")
+    def starten(self):
+        with self._lock:
+            return self._starten()
+
+    def _starten(self):
+        if self._stop_event.is_set():
             return False
-
-        os.environ["JOBSCOUT_OLLAMA_URL"] = PORTABLE_OLLAMA_URL
-        if self._bereit():
-            logging.info("Portable KI-Laufzeit ist bereits unter %s erreichbar.", PORTABLE_OLLAMA_URL)
+        if self.prozess is not None and self.prozess.poll() is None and self._bereit():
             return True
-
-        umgebung = os.environ.copy()
-        umgebung.update(
-            {
-                "OLLAMA_HOST": PORTABLE_OLLAMA_HOST,
-                "OLLAMA_MODELS": str(self.model_ordner),
-                "OLLAMA_NOHISTORY": "1",
-            }
-        )
-        flags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
-        if self.prozess is None or self.prozess.poll() is not None:
-            if self._log_stream is not None:
-                self._log_stream.close()
-            log_ordner = self.basis_ordner / "data" / "logs"
-            log_ordner.mkdir(parents=True, exist_ok=True)
-            self._log_stream = (log_ordner / "ollama.log").open("ab")
+        self._stop_process()
+        if not (self.model_ordner / MODEL_FILE).is_file():
+            raise RuntimeError(f"Gemma-Modell fehlt: {self.model_ordner / MODEL_FILE}")
+        for backend in ("vulkan", "cpu"):
+            if self._stop_event.is_set():
+                return False
+            executable = self.basis_ordner / "runtime" / backend / "llama-server.exe"
+            if not executable.is_file():
+                continue
+            with socket.socket() as probe:
+                probe.bind(("127.0.0.1", 0))
+                port = probe.getsockname()[1]
+            key = secrets.token_urlsafe(32)
+            self.url = f"http://127.0.0.1:{port}"
+            os.environ["JOBSCOUT_OLLAMA_URL"] = self.url
+            os.environ["JOBSCOUT_LOCAL_AI_KEY"] = key
+            self.backend = backend
+            logs = self.basis_ordner / "data" / "logs"
+            logs.mkdir(parents=True, exist_ok=True)
+            self._log_stream = (logs / "llama.log").open("ab")
+            args = [str(executable), "--model", str(self.model_ordner / MODEL_FILE),
+                    "--alias", PORTABLE_MODEL, "--host", "127.0.0.1", "--port", str(port),
+                    "--api-key", key, "--offline", "--no-webui", "--no-agent", "--no-slots",
+                    "--ctx-size", str(LOCAL_AI_ANALYSIS_CONTEXT_TOKENS), "--parallel", "1",
+                    "--threads", str(max(2, min(8, (os.cpu_count() or 4) // 2))),
+                    "--n-gpu-layers", "-1" if backend == "vulkan" else "0"]
             try:
-                self.prozess = subprocess.Popen(
-                    [str(self.ollama_exe), "serve"],
-                    cwd=self.runtime_ordner,
-                    env=umgebung,
-                    stdin=subprocess.DEVNULL,
-                    stdout=self._log_stream,
-                    stderr=self._log_stream,
-                    creationflags=flags,
-                )
+                self.prozess = subprocess.Popen(args, cwd=executable.parent, stdin=subprocess.DEVNULL,
+                                               stdout=self._log_stream, stderr=self._log_stream,
+                                               creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+                process = self.prozess
+                deadline = time.monotonic() + 60
+                while not self._stop_event.is_set() and time.monotonic() < deadline and process.poll() is None:
+                    if self._bereit():
+                        if self._stop_event.is_set():
+                            break
+                        logging.info("Gemma 4 E2B bereit: Backend=%s, Modell=%s.", backend, PORTABLE_MODEL)
+                        return True
+                    time.sleep(0.2)
             except OSError:
-                self._log_stream.close()
-                self._log_stream = None
-                raise
-        for _ in range(40):
-            if self._bereit():
-                logging.info("Portable KI-Laufzeit gestartet: %s mit %s.", PORTABLE_OLLAMA_URL, PORTABLE_MODEL)
-                return True
-            if self.prozess.poll() is not None:
-                break
-            time.sleep(0.25)
-
-        logging.warning("Portable KI-Laufzeit konnte nicht gestartet werden.")
-        self.beenden()
-        return False
-
-    def beenden(self) -> None:
-        if self.prozess is None or self.prozess.poll() is not None:
-            if self._log_stream is not None:
-                self._log_stream.close()
-                self._log_stream = None
-            return
-        try:
-            self.prozess.terminate()
-            self.prozess.wait(timeout=5)
-        except (OSError, subprocess.TimeoutExpired):
-            flags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
-            subprocess.run(
-                ["taskkill", "/PID", str(self.prozess.pid), "/T", "/F"],
-                check=False,
-                stdin=subprocess.DEVNULL,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-                creationflags=flags,
-            )
-        finally:
-            self.prozess = None
-            if self._log_stream is not None:
-                self._log_stream.close()
-                self._log_stream = None
-
-    def _bereit(self) -> bool:
-        try:
-            with urlopen(f"{PORTABLE_OLLAMA_URL}/api/tags", timeout=0.5) as antwort:
-                daten = json.loads(antwort.read().decode("utf-8"))
-        except (URLError, TimeoutError, OSError, ValueError, json.JSONDecodeError):
+                logging.warning("Gemma-Laufzeit konnte mit %s nicht starten.", backend)
+            self._stop_process()
+        if self._stop_event.is_set():
             return False
-        namen = {str(modell.get("name", "")) for modell in daten.get("models", [])}
-        return PORTABLE_MODEL in namen or f"{PORTABLE_MODEL}:latest" in namen
+        raise RuntimeError("Gemma-Laufzeit startet nicht. Details: data/logs/llama.log")
 
+    def vorwaermen(self):
+        with self._lock:
+            if self._stop_event.is_set() or self._vorgewaermt:
+                return
+            self.vorwaerm_status = "Vorbereitung läuft im Hintergrund"
+            try:
+                if not self.starten():
+                    return
+                from analysis.llama_client import LlamaAnalysisClient
+                self._warm_client = LlamaAnalysisClient(response_schema={
+                    "type": "object", "properties": {"bereit": {"type": "boolean", "const": True}},
+                    "required": ["bereit"], "additionalProperties": False,
+                }, max_output_tokens=16)
+                prompt = ("Technische lokale Textverarbeitung ohne personenbezogene Daten. " * 40
+                          + 'Diese technischen Platzhalter nicht auswerten. Antworte nur mit {"bereit":true}.')
+                result = self._warm_client.generate_json(prompt, self._stop_event)
+                self._vorgewaermt = result == {"bereit": True}
+                self.vorwaerm_status = "Bereit" if self._vorgewaermt else "Modell geladen; Aufwärmanfrage fehlgeschlagen"
+                logging.info("Gemma-Vorwärmen: %s, Backend=%s.", self.vorwaerm_status, self.backend)
+            except Exception:
+                if not self._stop_event.is_set():
+                    self.vorwaerm_status = "Vorwärmen fehlgeschlagen; erneuter Start bei KI-Aktion"
+                    logging.exception("Gemma konnte im Hintergrund nicht vorgewärmt werden.")
+            finally:
+                self._warm_client = None
 
-def _basis_ordner() -> Path:
-    if getattr(sys, "frozen", False):
-        return Path(sys.executable).resolve().parent
-    return Path(__file__).resolve().parent
+    def _bereit(self):
+        try:
+            request = Request(self.url + "/v1/models", headers={"Authorization": "Bearer " + os.environ.get("JOBSCOUT_LOCAL_AI_KEY", "")})
+            with urlopen(request, timeout=0.5) as response:
+                models = json.load(response).get("data", [])
+            return any(item.get("id") == PORTABLE_MODEL for item in models)
+        except (OSError, ValueError):
+            return False
+
+    def beenden(self):
+        self._stop_event.set()
+        client = self._warm_client
+        if client is not None:
+            client.abbrechen()
+        self._stop_process()
+
+    def _stop_process(self):
+        process, self.prozess = self.prozess, None
+        if process is not None and process.poll() is None:
+            process.terminate()
+            try:
+                process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                process.wait(timeout=5)
+        stream, self._log_stream = self._log_stream, None
+        if stream is not None:
+            stream.close()
+        self._vorgewaermt = False

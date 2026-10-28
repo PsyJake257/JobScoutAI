@@ -26,6 +26,7 @@ from paths import APP_ICON_DATEI, APP_LOGO_DATEI, THIRD_PARTY_NOTICES_DATEI
 from service_factory import erstelle_job_search_service
 from providers import standard_provider_registry
 from setup_dialogs import suchquellen_editor, zeige_einleitung
+import glass_style
 
 
 SORTIERUNGEN = [
@@ -69,14 +70,14 @@ DARSTELLUNG_NAMEN = {
     "light": "Hell",
     "dark": "Dunkel",
 }
-FARBE_HINTERGRUND = ("#F3F6F9", "#0B1119")
-FARBE_SEITENLEISTE = ("#FFFFFF", "#0E1621")
-FARBE_KARTE = ("#FFFFFF", "#151E29")
-FARBE_KARTE_ZWEI = ("#EDF2F7", "#101923")
-FARBE_RAND = ("#D7E0E8", "#273444")
-FARBE_TEXT_SEKUNDAER = ("#526170", "#9AA9BA")
-FARBE_PRIMAER = ("#176DB3", "#62B2FF")
-FARBE_PRIMAER_HOVER = ("#125A94", "#3B9CF0")
+FARBE_HINTERGRUND = glass_style.BACKGROUND
+FARBE_SEITENLEISTE = glass_style.SIDEBAR
+FARBE_KARTE = glass_style.SURFACE
+FARBE_KARTE_ZWEI = glass_style.SURFACE_SECONDARY
+FARBE_RAND = glass_style.BORDER
+FARBE_TEXT_SEKUNDAER = glass_style.SECONDARY_TEXT
+FARBE_PRIMAER = glass_style.PRIMARY
+FARBE_PRIMAER_HOVER = glass_style.PRIMARY_HOVER
 FARBE_PRIMAER_TEXT = ("#FFFFFF", "#071522")
 FARBE_ERFOLG = ("#16865C", "#25A978")
 FARBE_WARNUNG = ("#B86E00", "#F0A43C")
@@ -181,6 +182,7 @@ def darstellung_normalisieren(wert):
 
 
 def aktionsfarbthema_anwenden():
+    glass_style.apply_theme(ctk.ThemeManager.theme)
     button_thema = ctk.ThemeManager.theme["CTkButton"]
     button_thema["fg_color"] = list(FARBE_PRIMAER)
     button_thema["hover_color"] = list(FARBE_PRIMAER_HOVER)
@@ -786,7 +788,8 @@ class JobScoutAI:
             fg_color=FARBE_SEITENLEISTE,
             corner_radius=0,
         )
-        self.seitenleiste.grid(row=0, column=0, sticky="nsew")
+        self.seitenleiste.configure(corner_radius=20, border_width=1, border_color=FARBE_RAND)
+        self.seitenleiste.grid(row=0, column=0, sticky="nsew", padx=(12, 0), pady=12)
         self.seitenleiste.grid_propagate(False)
         self.seitenleiste.grid_rowconfigure(9, weight=1)
 
@@ -865,7 +868,8 @@ class JobScoutAI:
         ).grid(row=11, column=0, sticky="ew", padx=20, pady=(0, 20))
 
     def _kopfzeile_erstellen(self):
-        kopf = ctk.CTkFrame(self.hauptbereich, fg_color="transparent", corner_radius=0)
+        kopf = ctk.CTkFrame(self.hauptbereich, fg_color=FARBE_KARTE_ZWEI,
+                            corner_radius=18, border_width=1, border_color=FARBE_RAND)
         kopf.grid(row=0, column=0, sticky="ew", padx=24, pady=(20, 14))
         kopf.grid_columnconfigure(0, weight=1)
 
@@ -875,7 +879,7 @@ class JobScoutAI:
             font=("Segoe UI", 26, "bold"),
             anchor="w",
         )
-        self.seiten_titel.grid(row=0, column=0, sticky="ew")
+        self.seiten_titel.grid(row=0, column=0, sticky="ew", padx=20, pady=(14, 0))
         self.seiten_untertitel = ctk.CTkLabel(
             kopf,
             text="Aktueller Stand Ihrer Jobsuche",
@@ -883,7 +887,7 @@ class JobScoutAI:
             text_color=FARBE_TEXT_SEKUNDAER,
             anchor="w",
         )
-        self.seiten_untertitel.grid(row=1, column=0, sticky="ew", pady=(2, 0))
+        self.seiten_untertitel.grid(row=1, column=0, sticky="ew", padx=20, pady=(2, 16))
 
     def _ansicht_layout_aktualisieren(self):
         self.liste.cancel_pending_scroll()
@@ -1145,10 +1149,13 @@ class JobScoutAI:
         suchanfrage = self._analyse_suchanfrage()
         abbruch_event = threading.Event()
         self.ki_analyse_abbruch = abbruch_event
+        self.ki_analyse_vorherige_jobs = deepcopy(self.analyse_jobs)
+        self.analyse_jobs = []
+        self.ki_analyse_fortschrittswert = (0, len(jobs))
         self.ki_analyse_zustand_snapshot = self.job_service.ki_analysezustand_sichern()
         self.ki_laeuft = True
         self.ki_zusammenfassung_veraltet = False
-        self.analyse_hinweis = "Die lokale KI analysiert die ausgewaehlten Treffer."
+        self.analyse_hinweis = f"KI-Vorprüfung aller {len(jobs)} Stellen. Anschließend folgen bis zu 15 Detailbewertungen."
         self._normaler_suchbutton_status_aktualisieren()
         self._ki_button_status_aktualisieren()
         self.ki_status.configure(text="KI-Analyse laeuft mit den aktuellen Kriterien...")
@@ -1168,6 +1175,8 @@ class JobScoutAI:
                 jobs,
                 suchanfrage,
                 abbruch_event=abbruch_event,
+                fortschritt=lambda done, total, partial: self._gui_ausfuehren(
+                    lambda: self._ki_analyse_fortschritt(done, total, partial, abbruch_event)),
             )
             self._gui_ausfuehren(
                 lambda: self._ki_analyse_abgeschlossen(
@@ -1187,12 +1196,39 @@ class JobScoutAI:
             logging.exception("Fehler bei der KI-Auswertung")
             self._gui_ausfuehren(lambda fehler=fehler: self._ki_analyse_fehlgeschlagen(fehler, abbruch_event))
 
+    def _ki_analyse_fortschritt(self, done, total, partial, abbruch_event):
+        if not self._abbruchlauf_ist_aktuell("ki_analyse_abbruch", abbruch_event):
+            return
+        self.ki_analyse_fortschrittswert = (done, total)
+        if partial is None:
+            self.analyse_hinweis = f"KI-Vorprüfung: {done}/{total} Stellen. Danach werden die 15 besten Kandidaten ausführlich bewertet."
+        else:
+            self.analyse_jobs = partial
+            self.analyse_hinweis = f"Detailanalyse: {done}/{total} Top-Kandidaten. Fertige Fazits stehen bereits unten."
+        if self.ansicht == "ki":
+            self._ki_live_aktualisieren()
+
+    def _ki_live_aktualisieren(self):
+        if getattr(self, "_ki_live_container", None) is None:
+            return
+        done, total = getattr(self, "ki_analyse_fortschrittswert", (0, 1))
+        self._ki_live_label.configure(text=self.analyse_hinweis)
+        self._ki_live_balken.set(done / max(1, total))
+        if getattr(self, "_ki_setup_hinweis", None) is not None:
+            self._ki_setup_hinweis.configure(text=self.analyse_hinweis)
+        for job in self.analyse_jobs:
+            key = job_schluessel(job)
+            if key not in self._ki_live_schluessel and job.hat_ki_daten():
+                self._ki_treffer_karte(job, parent=self._ki_live_container)
+                self._ki_live_schluessel.add(key)
+
     def _ki_analyse_abgeschlossen(self, jobs, kriterien, abbruch_event=None):
         if not self._abbruchlauf_ist_aktuell("ki_analyse_abbruch", abbruch_event):
             return
         self.ki_analyse_abbruch = None
         self.ki_analyse_zustand_snapshot = None
         self.analyse_jobs = list(jobs)
+        self.ki_analyse_vorherige_jobs = None
         self._ki_analysedaten_synchronisieren(self.analyse_jobs)
         self.ki_laeuft = False
         self.ki_jobsuche_laeuft = False
@@ -1210,13 +1246,17 @@ class JobScoutAI:
         self.ki_status.configure(text=self._ki_zusammenfassung_text())
         self._ki_button_status_aktualisieren()
         if self.ansicht == "ki":
-            self.zeige_ki_zusammenfassung()
+            position = self._scrollposition_lesen()
+            self.zeige_jobs()
+            self.app.after_idle(lambda: self.liste._parent_canvas.yview_moveto(position))
         else:
             self.zeige_jobs()
 
     def _ki_analyse_fehlgeschlagen(self, fehler, abbruch_event=None):
         if not self._abbruchlauf_ist_aktuell("ki_analyse_abbruch", abbruch_event):
             return
+        if getattr(self, "ki_analyse_vorherige_jobs", None) is not None:
+            self.analyse_jobs = self.ki_analyse_vorherige_jobs
         self.ki_analyse_abbruch = None
         self.ki_analyse_zustand_snapshot = None
         self.ki_laeuft = False
@@ -1234,6 +1274,8 @@ class JobScoutAI:
             return
         abbruch_event.set()
         self.job_service.ki_analyse_abbrechen()
+        if self.ki_analyse_vorherige_jobs is not None:
+            self.analyse_jobs = self.ki_analyse_vorherige_jobs
         self.job_service.ki_analysezustand_wiederherstellen(self.ki_analyse_zustand_snapshot)
         self.analyse_hinweis = "KI-Analyse abgebrochen. Die letzte abgeschlossene Auswertung bleibt erhalten."
         self.status.configure(text=self.analyse_hinweis)
@@ -1246,6 +1288,9 @@ class JobScoutAI:
     def _ki_analyse_abbruch_abgeschlossen(self, abbruch_event):
         if self.ki_analyse_abbruch is not abbruch_event:
             return
+        if self.ki_analyse_vorherige_jobs is not None:
+            self.analyse_jobs = self.ki_analyse_vorherige_jobs
+        self.ki_analyse_vorherige_jobs = None
         self.job_service.ki_analysezustand_wiederherstellen(self.ki_analyse_zustand_snapshot)
         self.ki_analyse_abbruch = None
         self.ki_analyse_zustand_snapshot = None
@@ -1287,6 +1332,8 @@ class JobScoutAI:
     def zeige_jobs(self):
         self.einleitung_ziele = {}
         self._beschreibungs_widgets = {}
+        self._ki_live_container = None
+        self._ki_setup_hinweis = None
         self._ansicht_layout_aktualisieren()
         if self.ansicht == "bewerbungen":
             self._quellen_filter_aktualisieren()
@@ -1929,7 +1976,7 @@ class JobScoutAI:
     def _lokale_ki_bereitstellen(self):
         runtime = getattr(self, "portable_ai", None)
         if runtime is not None and runtime.ollama_exe.is_file() and not runtime.starten():
-            raise RuntimeError("Die lokale KI konnte nicht gestartet werden. Details stehen in data/logs/ollama.log.")
+            raise RuntimeError("Die lokale KI konnte nicht gestartet werden. Details stehen in data/logs/llama.log.")
 
     def ki_jobsuche_abbrechen(self):
         abbruch_event = self.ki_jobsuche_abbruch
@@ -2219,7 +2266,7 @@ class JobScoutAI:
             for job in gespeicherte_jobs
             if job.status not in ("Neu", "Gespeichert")
         ]
-        ki_jobs = [job for job in (self.analyse_jobs or self.jobs or gespeicherte_daten) if job.hat_ki_daten()]
+        ki_jobs = [job for job in (self.analyse_jobs or self.jobs or gespeicherte_daten) if job.hat_ki_daten() and job.ki_bewertungsart != "technisch"]
         durchschnitt = (
             round(sum(job.ki_match_score for job in ki_jobs) / len(ki_jobs))
             if ki_jobs
@@ -2893,8 +2940,10 @@ class JobScoutAI:
             anchor="w",
         ).pack(fill="x", padx=18, pady=(16, 8))
         self._einstellungszeile(lizenz_karte, "JobScout AI", "MIT-Lizenz")
-        self._einstellungszeile(lizenz_karte, "Lokale KI", "Qwen3 4B - Apache License 2.0")
-        self._einstellungszeile(lizenz_karte, "KI-Laufzeit", "Ollama - MIT-Lizenz")
+        self._einstellungszeile(lizenz_karte, "Lokale KI", "Gemma 4 E2B - Apache License 2.0")
+        self.ki_backend_label = self._einstellungszeile(lizenz_karte, "KI-Backend", getattr(getattr(self, "portable_ai", None), "backend", "llama.cpp"))
+        self.ki_vorwaerm_label = self._einstellungszeile(lizenz_karte, "Vorwärmen", getattr(getattr(self, "portable_ai", None), "vorwaerm_status", "Wird beim Start vorbereitet"))
+        self._einstellungszeile(lizenz_karte, "KI-Laufzeit", "llama.cpp - MIT-Lizenz")
         ctk.CTkButton(
             lizenz_karte,
             text="Lizenzinformationen oeffnen",
@@ -3059,13 +3108,23 @@ class JobScoutAI:
             width=130,
             anchor="w",
         ).pack(side="left")
-        ctk.CTkLabel(
+        wert_label = ctk.CTkLabel(
             zeile,
             text=wert,
             anchor="w",
             justify="left",
             wraplength=760,
-        ).pack(side="left", fill="x", expand=True)
+        )
+        wert_label.pack(side="left", fill="x", expand=True)
+        return wert_label
+
+    def _vorwaerm_status_aktualisieren(self):
+        runtime = getattr(self, "portable_ai", None)
+        for name, value in (("ki_backend_label", getattr(runtime, "backend", "")),
+                            ("ki_vorwaerm_label", getattr(runtime, "vorwaerm_status", ""))):
+            label = getattr(self, name, None)
+            if self._widget_existiert(label):
+                label.configure(text=value)
 
     def _darstellung_geaendert(self, wert):
         self.darstellung_modus = darstellung_normalisieren(wert)
@@ -3147,21 +3206,25 @@ class JobScoutAI:
             laufend.pack(fill="x", padx=8, pady=(2, 12))
             ctk.CTkLabel(
                 laufend,
-                text="Lokale KI-Analyse laeuft",
+                text="Lokale KI-Analyse läuft",
                 font=("Segoe UI", 16, "bold"),
                 anchor="w",
             ).pack(fill="x", padx=16, pady=(14, 2))
-            ctk.CTkLabel(
+            self._ki_live_label = ctk.CTkLabel(
                 laufend,
-                text="Die ausgewaehlten Treffer werden mit Ihren Bewertungskriterien abgeglichen.",
+                text=self.analyse_hinweis or "Die Stellen werden einzeln mit Ihren Bewertungskriterien abgeglichen.",
                 text_color=FARBE_TEXT_SEKUNDAER,
                 anchor="w",
-            ).pack(fill="x", padx=16, pady=(0, 8))
-            fortschritt = ctk.CTkProgressBar(laufend, mode="indeterminate", height=7)
-            fortschritt.pack(fill="x", padx=16, pady=(0, 16))
-            fortschritt.start()
-            if not jobs:
-                return
+                wraplength=920,
+            )
+            self._ki_live_label.pack(fill="x", padx=16, pady=(0, 8))
+            self._ki_live_balken = ctk.CTkProgressBar(laufend, mode="determinate", height=7)
+            self._ki_live_balken.pack(fill="x", padx=16, pady=(0, 16))
+            self._ki_live_container = ctk.CTkFrame(self.liste, fg_color="transparent")
+            self._ki_live_container.pack(fill="x")
+            self._ki_live_schluessel = set()
+            self._ki_live_aktualisieren()
+            return  # Final charts and sorting are constructed once, after completion.
 
         if not self.normale_suchergebnisse and not self.ki_suchergebnisse:
             self._ki_analyse_leerzustand()
@@ -3196,7 +3259,9 @@ class JobScoutAI:
             return
 
         self._ki_ergebnis_status_anzeigen(jobs)
-        self._ki_visuelle_uebersicht(jobs)
+        echte_jobs = [job for job in jobs if job.ki_bewertungsart != "technisch"]
+        if echte_jobs:
+            self._ki_visuelle_uebersicht(echte_jobs)
 
         zusammenfassung = self._ki_gesamtfazit(jobs)
         self._ki_abschnitt("Einordnung der lokalen KI")
@@ -3418,14 +3483,15 @@ class JobScoutAI:
 
         if self.analyse_hinweis:
             hinweis_farbe = FARBE_FEHLER if self.analyse_hinweis.startswith(("Fehler", "Bitte", "Es liegen")) else FARBE_TEXT_SEKUNDAER
-            ctk.CTkLabel(
+            self._ki_setup_hinweis = ctk.CTkLabel(
                 karte,
                 text=self.analyse_hinweis,
                 text_color=hinweis_farbe,
                 anchor="w",
                 justify="left",
                 wraplength=920,
-            ).grid(row=7, column=0, columnspan=2, sticky="ew", padx=18, pady=(8, 12))
+            )
+            self._ki_setup_hinweis.grid(row=7, column=0, columnspan=2, sticky="ew", padx=18, pady=(8, 12))
 
     def _ki_analyse_leerzustand(self):
         leer = ctk.CTkFrame(
@@ -3470,7 +3536,7 @@ class JobScoutAI:
         status_text = {
             "echt": "Lokale KI-Analyse abgeschlossen",
             "teilweise": "Teilweise lokale KI-Analyse",
-            "technisch": "Technische Vorbewertung",
+            "technisch": "Keine echte KI-Auswertung",
         }.get(status, "Analyseergebnis")
         quellen = []
         if "normal" in self.analyse_quellen_snapshot:
@@ -3573,9 +3639,9 @@ class JobScoutAI:
         ctk.CTkButton(seitenleiste, text="Weiter >", width=110, command=self.naechste_seite,
                       state="normal" if self.aktuelle_seite + 1 < self._seitenanzahl(anzahl) else "disabled").pack(side="right")
 
-    def _ki_treffer_karte(self, job):
+    def _ki_treffer_karte(self, job, parent=None):
         karte = ctk.CTkFrame(
-            self.liste,
+            self.liste if parent is None else parent,
             fg_color=FARBE_KARTE,
             border_width=1,
             border_color=FARBE_RAND,
@@ -3588,18 +3654,15 @@ class JobScoutAI:
         quelle = self._anzeigetext(job.quellen_text(), "Quelle unbekannt")
         ctk.CTkLabel(
             karte,
-            text=f"{job.ki_match_score}/100 - {titel}",
+            text=f"{job.ki_match_score}/100 - {titel}" if job.ki_bewertungsart != "technisch" else f"Keine KI-Auswertung - {titel}",
             font=("Segoe UI", 16, "bold"),
             anchor="w",
             wraplength=880,
         ).pack(fill="x", padx=12, pady=(10, 2))
-        fortschritt = ctk.CTkProgressBar(
-            karte,
-            height=7,
-            progress_color=self._match_farbe(job.ki_match_score),
-        )
-        fortschritt.pack(fill="x", padx=12, pady=(2, 6))
-        fortschritt.set(max(0, min(100, job.ki_match_score)) / 100)
+        if job.ki_bewertungsart != "technisch":
+            fortschritt = ctk.CTkProgressBar(karte, height=7, progress_color=self._match_farbe(job.ki_match_score))
+            fortschritt.pack(fill="x", padx=12, pady=(2, 6))
+            fortschritt.set(max(0, min(100, job.ki_match_score)) / 100)
         ctk.CTkLabel(
             karte,
             text=f"{firma} | {ort} | Quelle: {quelle} | Empfehlung: {job.ki_empfehlung or 'offen'}",
@@ -3777,13 +3840,10 @@ class JobScoutAI:
                 anchor="w",
                 wraplength=900,
             ).pack(fill="x", padx=12, pady=2)
-            ki_balken = ctk.CTkProgressBar(
-                karte,
-                height=6,
-                progress_color=self._match_farbe(job.ki_match_score),
-            )
-            ki_balken.pack(fill="x", padx=12, pady=(2, 5))
-            ki_balken.set(max(0, min(100, job.ki_match_score)) / 100)
+            if job.ki_bewertungsart != "technisch":
+                ki_balken = ctk.CTkProgressBar(karte, height=6, progress_color=self._match_farbe(job.ki_match_score))
+                ki_balken.pack(fill="x", padx=12, pady=(2, 5))
+                ki_balken.set(max(0, min(100, job.ki_match_score)) / 100)
 
         followup_text = self.job_service.followup_text(job)
         if followup_text and not kompakt:
@@ -4808,12 +4868,14 @@ class JobScoutAI:
         if self.ki_zusammenfassung_veraltet:
             return f"Analyse nicht aktuell: Auswahl oder Kriterien wurden geaendert. Letztes Fazit: {zusammenfassung}"
         if analyse_status == "technisch":
-            return f"Nur technische Vorbewertung, keine echte Ollama-Analyse: {zusammenfassung}"
+            return f"Keine echte KI-Auswertung abgeschlossen: {zusammenfassung}"
         if analyse_status == "teilweise":
-            return f"Teilweise echte Ollama-Analyse: {zusammenfassung}"
+            return f"Teilweise echte KI-Analyse: {zusammenfassung}"
         return f"KI-Analyse aktuell: {zusammenfassung}"
 
     def _ki_job_text(self, job):
+        if job.ki_bewertungsart == "technisch":
+            return "Keine KI-Auswertung | " + (job.ki_zusammenfassung or "Bitte erneut analysieren.")
         teile = []
         if job.ki_match_score:
             teile.append(f"KI-Match: {job.ki_match_score}/100")
@@ -4826,6 +4888,8 @@ class JobScoutAI:
         return " | ".join(teile)
 
     def _ki_detail_text(self, job):
+        if job.ki_bewertungsart == "technisch":
+            return "Keine KI-Auswertung\n" + (job.ki_zusammenfassung or "Bitte erneut analysieren.")
         zeilen = []
         if job.ki_match_score:
             zeilen.append(f"Match: {job.ki_match_score}/100")

@@ -3,7 +3,7 @@
 JobScout AI speichert Einstellungen, Nutzerprofile, Suchbegriffe,
 Stellenangebote und Bewerbungsstatus lokal im Ordner `data`.
 
-Die KI-Auswertung mit Qwen3 4B erfolgt lokal auf dem Computer. Die dabei
+Die KI-Auswertung mit Gemma 4 E2B erfolgt lokal auf dem Computer. Die dabei
 verwendeten Stellen- und Profildaten werden nicht an einen externen KI-Dienst
 gesendet.
 

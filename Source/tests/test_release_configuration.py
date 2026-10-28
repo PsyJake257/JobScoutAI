@@ -48,16 +48,17 @@ class ReleaseConfigurationTests(unittest.TestCase):
         self.assertIn("branding_datas", spec)
         self.assertIn('icon=str(Path("assets") / "jobscout_icon.ico")', spec)
 
-    def test_oeffentlicher_build_verwendet_portables_qwen3_4b(self):
+    def test_oeffentlicher_build_verwendet_portables_gemma_e2b(self):
         source = Path(__file__).resolve().parents[1]
         runtime = (source / "portable_ai.py").read_text(encoding="utf-8")
         build_script = (source.parent / "Tools" / "PublicBuild_erstellen.ps1").read_text(encoding="utf-8")
 
-        self.assertEqual(LOCAL_AI_ANALYSIS_MODEL, "qwen3:4b")
-        self.assertIn('PORTABLE_OLLAMA_HOST = "127.0.0.1:11435"', runtime)
-        self.assertIn('"OLLAMA_MODELS": str(self.model_ordner)', runtime)
-        self.assertIn('"manifests\\registry.ollama.ai\\library\\qwen3\\4b"', build_script)
-        self.assertIn("QWEN3-APACHE-2.0.txt", build_script)
+        self.assertEqual(LOCAL_AI_ANALYSIS_MODEL, "gemma-4-E2B")
+        self.assertIn('"--host", "127.0.0.1"', runtime)
+        self.assertIn('"--offline"', runtime)
+        self.assertIn('"--api-key", key', runtime)
+        self.assertIn("MODEL-PROVENANCE.json", build_script)
+        self.assertIn("GEMMA4_E2B_LICENSE.txt", build_script)
 
 
 if __name__ == "__main__":

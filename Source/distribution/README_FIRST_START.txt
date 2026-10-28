@@ -9,12 +9,15 @@ JobScout AI Portable
    Weitere Suchquellen unter Einstellungen einrichten: Anbieter oeffnen,
    eigene Zugangsdaten eintragen und speichern. Die lokale .env wird erstellt.
    Schluessel werden verdeckt angezeigt und sind ohne Neustart nutzbar.
-5. Beim ersten KI-Aufruf kann das lokale Modell je nach Computer etwas Zeit
-   zum Laden benoetigen.
+5. Das Modell wärmt beim Programmstart im Hintergrund vor. Beim ersten Start
+   kann das je nach Computer länger dauern. Das Fenster bleibt bedienbar.
+6. Die KI-Analyse prüft alle ausgewählten Stellen und liefert ausführliche
+   Kurzfazits für bis zu 15 Top-Kandidaten. KI-Aussagen bitte selbst prüfen.
 
-Die lokale KI Qwen3 4B und die erforderliche CPU-Laufzeit sind bereits
-enthalten. JobScout AI startet die Laufzeit unsichtbar und beendet sie mit der
-App. Fuer die eigentliche Stellensuche wird eine Internetverbindung benoetigt.
+Die lokale KI Gemma 4 E2B und die CPU-/Vulkan-Laufzeit sind bereits enthalten.
+JobScout AI bevorzugt die GPU und versucht bei Startproblemen die CPU.
+Die Laufzeit startet unsichtbar und endet mit der App. Für die eigentliche
+Stellensuche wird eine Internetverbindung benötigt.
 
 Persoenliche Daten werden im Unterordner data gespeichert. Fuer eine saubere
 Weitergabe darf dieser Ordner keine eigenen Profile oder Stellen enthalten.

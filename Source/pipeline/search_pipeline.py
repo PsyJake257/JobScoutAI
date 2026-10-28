@@ -317,8 +317,8 @@ class SearchPipeline:
         ziel_diagnose["dubletten_ki"] += entfernt
         return ergebnis
 
-    def ki_analysieren(self, jobs: list[Job], suchanfrage: SearchRequest, abbruch_event=None) -> list[Job]:
-        return self.ai_analysis.analysieren(jobs, suchanfrage.bereinigt(), abbruch_event=abbruch_event)
+    def ki_analysieren(self, jobs: list[Job], suchanfrage: SearchRequest, abbruch_event=None, fortschritt=None) -> list[Job]:
+        return self.ai_analysis.analysieren(jobs, suchanfrage.bereinigt(), abbruch_event=abbruch_event, fortschritt=fortschritt)
 
     def diagnose_meldung(self) -> str:
         diagnose = self.letzte_diagnose

@@ -1,6 +1,7 @@
 import logging
 import os
 import sys
+import threading
 
 from logging_config import log_pfad, richte_logging_ein
 
@@ -43,11 +44,16 @@ def main() -> int:
         from portable_ai import PortableAiRuntime
 
         portable_ai = PortableAiRuntime()
-        portable_ai.starten()
+        # Warm in the background after constructing the UI, never before it appears.
         from app import JobScoutAI
 
         app = JobScoutAI()
         app.portable_ai = portable_ai
+        def vorwaermen():
+            portable_ai.vorwaermen()
+            app._gui_ausfuehren(app._vorwaerm_status_aktualisieren)
+
+        threading.Thread(target=vorwaermen, daemon=True, name="Gemma-Vorwaermen").start()
         if "--smoke-test" in sys.argv:
             from config import VERSION
             import json
@@ -82,6 +88,27 @@ def main() -> int:
                     app.app.after(500, sichtbar_pruefen)
                 else:
                     tour.schliessen(speichern=False)
+                    # Exercise the incremental layout without model calls or saved test jobs.
+                    from models import Job
+                    vorher = app.analyse_jobs
+                    app.analyse_jobs = []
+                    app.ki_laeuft = True
+                    event = threading.Event()
+                    app.ki_analyse_abbruch = event
+                    app.zeige_ki_zusammenfassung()
+                    container = app._ki_live_container
+                    label = app._ki_live_label
+                    app._ki_analyse_fortschritt(4, 20, None, event)
+                    job = Job("Technischer Layoutcheck", "Test", "Test", "Test")
+                    job.ki_zusammenfassung = "Technischer Test ohne Speicherung."
+                    app._ki_analyse_fortschritt(1, 15, [job], event)
+                    app._ki_analyse_fortschritt(1, 15, [job], event)
+                    if (app._ki_live_container is not container or app._ki_live_label is not label
+                            or len(container.winfo_children()) != 1):
+                        fehler.append("Live-Analyse baut Widgets neu auf oder dupliziert Karten")
+                    app.analyse_jobs = vorher
+                    app.ki_laeuft = False
+                    app.ki_analyse_abbruch = None
                     app.app.after(100, app.beenden)
 
             app.app.after(100, tour_pruefen)

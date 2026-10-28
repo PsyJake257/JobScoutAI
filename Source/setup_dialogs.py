@@ -35,7 +35,7 @@ EINLEITUNG = (
     ("profil", "profil_werkzeuge", "Dein persoenliches Profil",
      "Speichere unterschiedliche Profile mit Erfahrung, Staerken und Wunschrollen. Laden oeffnet ein Profil; Speichern unter legt eine benannte Sammlung deiner Angaben an."),
     ("ki", "analyse_setup", "Angebote persoenlich bewerten",
-     "Waehle hier die Trefferquellen und das passende Nutzerprofil. Kriterien bearbeiten legt deine Wuensche fest. Analyse starten bewertet die Treffer lokal mit Qwen3 4B. Du erhaeltst Match-Wert, Staerken und offene Fragen; beim ersten Aufruf kann das Modell etwas Ladezeit brauchen."),
+     "Waehle hier die Trefferquellen und das passende Nutzerprofil. Gemma prüft zuerst alle ausgewählten Stellen und bewertet danach bis zu 15 Top-Kandidaten ausführlich. Fertige Kurzfazits erscheinen bereits während der Analyse. Ohne echte KI-Auswertung wird keine Match-Punktzahl angezeigt. Das Modell wärmt beim Programmstart im Hintergrund vor."),
     ("bewerbungen", "bewerbung_status_tabs", "Bewerbungen im Blick",
      "Das Herz auf einer Stellenkarte speichert das Angebot. Diese Reiter ordnen deine Bewerbungen nach Fortschritt. Den Status aenderst du direkt auf der Karte; Details bieten weitere Notizen."),
     ("einstellungen", "zugangsdaten", "Weitere Suchquellen hinzufuegen",

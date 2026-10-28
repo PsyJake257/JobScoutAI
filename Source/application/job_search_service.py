@@ -469,7 +469,7 @@ class JobSearchService:
             self._analysezustand_wiederherstellen(analyse_snapshot)
             raise
 
-    def ki_analyse_ausfuehren(self, jobs: list[Job], suchanfrage: SearchRequest, abbruch_event=None) -> list[Job]:
+    def ki_analyse_ausfuehren(self, jobs: list[Job], suchanfrage: SearchRequest, abbruch_event=None, fortschritt=None) -> list[Job]:
         abbruch_pruefen(abbruch_event)
         if not jobs:
             self.pipeline.ki_analysieren([], suchanfrage, abbruch_event=abbruch_event)
@@ -487,13 +487,14 @@ class JobSearchService:
                 jobs,
                 suchanfrage,
                 abbruch_event=abbruch_event,
+                fortschritt=fortschritt,
             )
             abbruch_pruefen(abbruch_event)
             self.jobs_speichern(self._vereinige_jobs(self.job_repository.laden(), analysierte_jobs))
             self._suchbegriff_statistiken_aktualisieren()
             self.letzte_meldung = f"{len(jobs)} Jobs gefunden"
             return analysierte_jobs
-        except OperationCancelled:
+        except Exception:
             for job, snapshot in zip(jobs, job_snapshots):
                 job.ki_daten_aus(snapshot)
             self.letzte_meldung = meldung_snapshot

@@ -2,15 +2,15 @@
 
 Kostenloser Windows-Assistent für Stellensuche, Bewerbungsorganisation und
 lokale KI-Auswertung. Portable App ohne Installation, mit vollständig
-enthaltenem Qwen3-4B-Modell. Public Preview: **2.40.2**.
+enthaltenem Gemma-4-E2B-Modell. Public Preview: **2.44.0**.
 
 ## Fertige App herunterladen
 
-Unter [Releases](https://github.com/PsyJake257/JobScoutAI/releases/tag/v2.40.2)
+Unter [Releases](https://github.com/PsyJake257/JobScoutAI/releases/tag/v2.44.0)
 beide Dateien herunterladen:
 
-- `JobScoutAI-Portable-2.40.2.7z.001`
-- `JobScoutAI-Portable-2.40.2.7z.002`
+- `JobScoutAI-Portable-2.44.0.7z.001`
+- `JobScoutAI-Portable-2.44.0.7z.002`
 
 Beide im selben Ordner lassen. `.001` mit [7-Zip](https://www.7-zip.org/)
 entpacken; der zweite Teil wird automatisch verwendet. Danach
@@ -26,15 +26,20 @@ Quellcode und Downloads zugreifen.
 - normale Jobsuche und KI-Vorschläge für passende Berufsbezeichnungen
 - Suchbegriffe und mehrere persönliche Profile speichern und laden
 - Stellen speichern, nach Bewerbungsstatus filtern und Status direkt ändern
-- lokale KI-Analyse mit Match-Wert, Stärken und offenen Punkten
+- KI-Vorprüfung aller ausgewählten Stellen, danach ausführliche Kurzfazits,
+  Passungsgründe und offene Fragen für bis zu 15 Top-Kandidaten
+- schrittweise Ergebnisse ohne kompletten Seitenaufbau nach jeder Stelle
+- matte Glasoptik mit klaren Kontrasten und statischen Lichtreflexen
 - geführte Einführung und API-Einrichtung direkt in den Einstellungen
 - Profile, Einstellungen und Bewerbungsdaten lokal im App-Ordner speichern
 
 ## Voraussetzungen
 
 Windows 10/11 x64, mindestens 8 GB RAM empfohlen. Für Archiv und entpackte App
-etwa 8 GB freien Speicher einplanen. Die CPU-KI kann beim Laden und Rechnen
-Zeit benötigen. Für Stellenquellen ist Internet erforderlich.
+etwa 10 GB freien Speicher einplanen. 16 GB RAM bieten mehr Spielraum.
+Vulkan/GPU wird bevorzugt; bei Startproblemen wird die CPU-Laufzeit versucht.
+Das Modell wärmt beim Programmstart im Hintergrund vor. Laden und Rechnen
+können je nach Computer Zeit benötigen. Für Stellenquellen ist Internet erforderlich.
 
 Arbeitsagentur und Arbeitnow benötigen keinen persönlichen Schlüssel.
 Weitere Quellen erfordern eigene, rechtmäßig bezogene API-Zugänge und können
@@ -64,21 +69,26 @@ python -m venv .venv
 .\.venv\Scripts\python.exe Source/main.py
 ```
 
-Für KI im Quellcode-Modus muss eine eigene lokale Ollama-Laufzeit mit
-`qwen3:4b` vorhanden sein. Das große Modell wird nur im portablen Download
+Für KI im Quellcode-Modus die Ordner `runtime/` und `models/` aus dem
+portablen Download neben `Source/main.py` bereitstellen. Die App startet die
+lokale llama.cpp-Laufzeit selbst. Das große Modell wird nur im Download
 mitgeliefert, nicht in Git gespeichert. Optionale API-Werte sind in
 `.env.example` dokumentiert; die App legt `Source/.env` über die Einstellungen an.
 
 Gezielte Tests, vom Ordner `Source` aus: `python -m unittest discover -s tests`.
 GUI-Build: in `Source` mit dem Python der virtuellen Umgebung
 `python -m PyInstaller --noconfirm JobScoutAI.spec`. Dieser GUI-Build allein
-enthält noch nicht Ollama und das Modell; Lizenztexte und externe Laufzeit
-müssen für eine Weitergabe ebenfalls vollständig beigefügt werden.
+enthält noch nicht llama.cpp und das Modell. Einen frischen vollständigen
+Download erstellt `Tools/PublicBuild_erstellen.ps1 -AiAssets <Ordner>`.
+Der Ordner muss `runtime/cpu`, `runtime/vulkan` und das dokumentierte GGUF
+unter `models/` enthalten. Die Modell-Prüfsumme wird vor dem Kopieren geprüft;
+Lizenztexte werden aus `Source/distribution` beigefügt. Danach
+`Tools/PublicBuild_paketieren.ps1 -BuildPath <frischer Buildordner>` ausführen.
 Die Version wird ausschließlich in `Source/config.py` gepflegt.
 
 ## Lizenzen und Weitergabe
 
-Qwen3-4B: Apache-2.0; Ollama: MIT. Andere Komponenten behalten ihre Lizenzen.
+Gemma 4 E2B: Apache-2.0; llama.cpp: MIT. Andere Komponenten behalten ihre Lizenzen.
 Die MIT-Lizenz des eigenen Codes ersetzt nicht die Lizenzen fremder
 Bibliotheken, Windows-Laufzeitdateien, Schriften oder Anzeigeninhalte.
 

@@ -7,12 +7,13 @@ liegt unter `licenses/LICENSE-JOBSCOUT-AI.txt`.
 
 ## Lokale KI
 
-- Modell: Qwen3 4B, Ollama-Tag `qwen3:4b`, Q4_K_M
-- Urheber/Projekt: Qwen Team / Alibaba Cloud
+- Modell: Gemma 4 E2B IT, GGUF Q4_K_M
+- Urheber/Projekt: Google DeepMind; GGUF-Quantisierung von Unsloth
 - Lizenz: Apache License 2.0
-- Projekt: https://github.com/QwenLM/Qwen3
-- Modellinformation: https://ollama.com/library/qwen3:4b
-- Vollstaendiger Lizenztext: `licenses/QWEN3-APACHE-2.0.txt`
+- Modellinformation: https://ai.google.dev/gemma/docs/core/model_card_4
+- Artefakt: https://huggingface.co/unsloth/gemma-4-E2B-it-GGUF
+- Vollständiger Lizenztext: `licenses/GEMMA4_E2B_LICENSE.txt`
+- Exakte Revision, Dateigröße und SHA-256: `MODEL-PROVENANCE.json`
 
 Das Modell arbeitet lokal. Stellenanzeigen, Nutzerprofile und
 Bewertungskriterien werden fuer die KI-Auswertung nicht an einen externen
@@ -20,14 +21,16 @@ KI-Dienst gesendet.
 
 ## KI-Laufzeit
 
-- Komponente: Ollama
+- Komponente: llama.cpp / ggml mit CPU- und Vulkan-Backend
 - Lizenz: MIT License
-- Projekt: https://github.com/ollama/ollama
-- Vollstaendiger Lizenztext: `licenses/OLLAMA-LICENSE.txt`
-- Weitere Bibliothekshinweise der Laufzeit: `licenses/ollama-vendor/`
+- Projekt: https://github.com/ggml-org/llama.cpp
+- Vollständiger Lizenztext: `licenses/LLAMA_CPP_LICENSE.txt`
+- Weitere Laufzeittexte: `licenses/CPP_HTTPLIB_LICENSE.txt`, `licenses/LLVM-LICENSE.txt`
 
-Der portable Build enthaelt die CPU-Laufzeit. Ollama wird ausschliesslich
-lokal auf `127.0.0.1` gestartet und beim Beenden von JobScout AI geschlossen.
+Der portable Build bevorzugt Vulkan/GPU und versucht bei Startproblemen die
+CPU-Laufzeit. Der Server läuft ausschließlich auf `127.0.0.1` an einem zufälligen
+Port mit temporärem Zugriffsschlüssel im Offline-Modus. Er wird beim Beenden
+von JobScout AI geschlossen. Ollama ist nicht enthalten.
 
 ## Anwendungsbibliotheken
 
@@ -49,8 +52,8 @@ LLVM-Ausnahmen) und MinGW-w64/winpthreads. Originaltexte und Quellen sind
 unter `licenses/` und `COMPONENTS.md` aufgeführt. Die in Pillow enthaltenen
 Bildbibliotheken sind in dessen vollständiger Sammellizenz aufgeführt.
 
-Qwen3-4B wird als unverändertes, von Ollama bereitgestelltes Q4_K_M-Artefakt
-weitergegeben, nicht als eigene Modellkreation. Hersteller und Markeninhaber
+Gemma 4 E2B wird als unverändertes Q4_K_M-Artefakt der dokumentierten Unsloth-
+Revision weitergegeben, nicht als eigene Modellkreation. Hersteller und Markeninhaber
 unterstützen oder zertifizieren JobScout AI damit nicht. Roboto wird
 unverändert mit CustomTkinter weitergegeben. App-Logo und Icon wurden für
 dieses Projekt KI-gestützt erstellt; fremde Markenrechte werden nicht gewährt.

@@ -2,9 +2,56 @@
 
 from customtkinter import *
 import customtkinter as _ctk
+from PIL import ImageTk as _ImageTk
+from glass_style import SURFACE_COLORS as _GLASS_COLORS, glass_edge as _glass_edge
 
 from ui_text import anzeigetext
 from scroll_widgets import ResponsiveScrollableFrame as CTkScrollableFrame
+
+
+class CTkFrame(_ctk.CTkFrame):
+    """Frosted surfaces reuse normal CTk layout and never draw on scroll events."""
+    def __init__(self, *args, **kwargs):
+        self._glass_pending = None
+        self._glass_key = None
+        self._glass_images = ()
+        colors = kwargs.get("fg_color", _ctk.ThemeManager.theme["CTkFrame"]["fg_color"])
+        if colors != "transparent" and any(c in _GLASS_COLORS for c in _farben(colors)):
+            if kwargs.get("corner_radius", 16) > 0:
+                kwargs["corner_radius"] = max(14, kwargs.get("corner_radius", 16))
+                kwargs.setdefault("border_width", 1)
+        super().__init__(*args, **kwargs)
+
+    def _draw(self, no_color_updates=False):
+        super()._draw(no_color_updates)
+        if self._glass_pending is None:
+            self._glass_pending = self.after_idle(self._paint_glass)
+
+    def _paint_glass(self):
+        self._glass_pending = None
+        color = self._apply_appearance_mode(self._fg_color)
+        width, height = round(self._apply_widget_scaling(self._current_width)), round(self._apply_widget_scaling(self._current_height))
+        radius = round(self._apply_widget_scaling(self._corner_radius))
+        key = width, height, radius, color
+        if key == self._glass_key:
+            return
+        self._glass_key = key
+        self._canvas.delete("glass_edge")
+        self._glass_images = ()
+        if color not in _GLASS_COLORS or width < 40 or height < 24:
+            return
+        top = _ImageTk.PhotoImage(_glass_edge(width, height, radius, color), master=self._canvas)
+        bottom = _ImageTk.PhotoImage(_glass_edge(width, height, radius, color, False), master=self._canvas)
+        self._glass_images = top, bottom
+        self._canvas.create_image(0, 0, anchor="nw", image=top, tags="glass_edge")
+        self._canvas.create_image(0, height, anchor="sw", image=bottom, tags="glass_edge")
+
+    def destroy(self):
+        if self._glass_pending is not None:
+            self.after_cancel(self._glass_pending)
+            self._glass_pending = None
+        super().destroy()
+        self._glass_images = ()
 
 
 class _Text:
@@ -134,6 +181,20 @@ class CTkSegmentedButton(_ctk.CTkSegmentedButton):
         button = super()._create_button(index, value)
         button.configure(text=anzeigetext(value))
         return button
+
+    def _select_button_by_value(self, value):
+        super()._select_button_by_value(value)
+        self._button_contrast()
+
+    def _unselect_button_by_value(self, value):
+        super()._unselect_button_by_value(value)
+        self._button_contrast()
+
+    def _button_contrast(self):
+        for button in self._buttons_dict.values():
+            colors = _farben(button.cget("fg_color"))
+            if all(isinstance(c, str) and c.startswith("#") and len(c) == 7 for c in colors):
+                button.configure(text_color=tuple(kontrastfarbe(c) for c in colors))
 
 
 class CTkToplevel(_ctk.CTkToplevel):

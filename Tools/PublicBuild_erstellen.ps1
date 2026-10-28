@@ -1,146 +1,70 @@
-param(
-    [string]$OllamaInstall = "$env:LOCALAPPDATA\Programs\Ollama",
-    [string]$OllamaModelStore = "$env:USERPROFILE\.ollama\models"
-)
-
-$ErrorActionPreference = "Stop"
+param([string]$AiAssets = '', [string]$GuiBuild = '', [string]$OutputPath = '')
+$ErrorActionPreference = 'Stop'
 $Root = Split-Path -Parent $PSScriptRoot
-$Source = Join-Path $Root "Source"
-$Python = Join-Path $Source ".venv\Scripts\python.exe"
-$PublicRoot = Join-Path $Root "PublicBuild"
-$Target = Join-Path $PublicRoot "JobScoutAI-Portable"
-$BuildRoot = Join-Path $Root "Backups\public_build_candidate"
-$OllamaExe = Join-Path $OllamaInstall "ollama.exe"
-$OllamaLib = Join-Path $OllamaInstall "lib\ollama"
-$ModelManifest = Join-Path $OllamaModelStore "manifests\registry.ollama.ai\library\qwen3\4b"
-
-if (-not (Test-Path -LiteralPath $Python -PathType Leaf)) { throw "Python-Umgebung fehlt: $Python" }
-if (-not (Test-Path -LiteralPath $OllamaExe -PathType Leaf)) { throw "Ollama-Laufzeit fehlt: $OllamaExe" }
-if (-not (Test-Path -LiteralPath $OllamaLib -PathType Container)) { throw "Ollama-Bibliotheken fehlen: $OllamaLib" }
-if (-not (Test-Path -LiteralPath $ModelManifest -PathType Leaf)) { throw "Qwen3-4B-Modell fehlt: $ModelManifest" }
-
-New-Item -ItemType Directory -Force -Path $PublicRoot | Out-Null
-$PublicRootPath = [IO.Path]::GetFullPath($PublicRoot).TrimEnd([IO.Path]::DirectorySeparatorChar)
-$TargetPath = [IO.Path]::GetFullPath($Target)
-if (-not $TargetPath.StartsWith($PublicRootPath + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) {
-    throw "Unsicherer Zielpfad: $TargetPath"
+$Source = Join-Path $Root 'Source'
+$Python = Join-Path $Source '.venv/Scripts/python.exe'
+$Version = [regex]::Match((Get-Content "$Source/config.py" -Raw), '(?m)^VERSION\s*=\s*"([^"]+)"').Groups[1].Value
+if (-not $Version) { throw 'VERSION fehlt in Source/config.py' }
+if (-not $AiAssets) { $AiAssets = Join-Path $Root 'ExternalAssets/Gemma4-E2B' }
+if (-not $OutputPath) { $OutputPath = Join-Path $Root "PublicBuild/Clean-$Version/JobScoutAI-Portable" }
+$Target = [IO.Path]::GetFullPath($OutputPath)
+$AllowedRoot = [IO.Path]::GetFullPath((Join-Path $Root 'PublicBuild')).TrimEnd('\') + '\'
+if (-not $Target.StartsWith($AllowedRoot, [StringComparison]::OrdinalIgnoreCase)) { throw 'Build-Ziel muss unter PublicBuild liegen' }
+if (Test-Path -LiteralPath $Target) { throw "Ziel existiert bereits: $Target" }
+$Distribution = Join-Path $Source 'distribution'
+$Provenance = Get-Content "$Distribution/MODEL-PROVENANCE.json" -Raw | ConvertFrom-Json
+$Model = Join-Path $AiAssets ('models/' + $Provenance.file)
+if (-not (Test-Path -LiteralPath $Model)) { throw 'Gemma-GGUF fehlt; AiAssets muss models und runtime enthalten' }
+if ((Get-FileHash -LiteralPath $Model -Algorithm SHA256).Hash.ToLowerInvariant() -ne $Provenance.sha256) { throw 'Gemma-Modell stimmt nicht mit der dokumentierten Herkunft überein' }
+foreach ($Backend in 'cpu','vulkan') {
+    if (-not (Test-Path -LiteralPath "$AiAssets/runtime/$Backend/llama-server.exe")) { throw "Laufzeit fehlt: $Backend" }
 }
-$BackupsRootPath = [IO.Path]::GetFullPath((Join-Path $Root "Backups")).TrimEnd([IO.Path]::DirectorySeparatorChar)
-$BuildRootPath = [IO.Path]::GetFullPath($BuildRoot)
-if (-not $BuildRootPath.StartsWith($BackupsRootPath + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) {
-    throw "Unsicherer temporaerer Buildpfad: $BuildRootPath"
+if (-not $GuiBuild) {
+    $BuildRoot = Join-Path $Root ("Backups/main_build_" + $Version + '_' + (Get-Date -Format 'yyyyMMdd_HHmmss'))
+    Push-Location $Source
+    try {
+        & $Python -m PyInstaller --noconfirm --distpath "$BuildRoot/dist" --workpath "$BuildRoot/build" JobScoutAI.spec
+        if ($LASTEXITCODE -ne 0) { throw 'GUI-Build fehlgeschlagen' }
+    } finally { Pop-Location }
+    $GuiBuild = "$BuildRoot/dist/JobScoutAI"
 }
-
-if (Test-Path -LiteralPath $BuildRoot) { Remove-Item -LiteralPath $BuildRoot -Recurse -Force }
-New-Item -ItemType Directory -Force -Path $BuildRoot | Out-Null
-
-Push-Location $Source
-try {
-    & $Python -m PyInstaller --noconfirm --clean --distpath (Join-Path $BuildRoot "dist") --workpath (Join-Path $BuildRoot "build") "JobScoutAI.spec"
-    if ($LASTEXITCODE -ne 0) { throw "PyInstaller fehlgeschlagen mit Exitcode $LASTEXITCODE" }
-} finally {
-    Pop-Location
+if (-not (Test-Path -LiteralPath "$GuiBuild/JobScoutAI.exe")) { throw 'GUI-EXE fehlt' }
+New-Item -ItemType Directory -Path $Target -Force | Out-Null
+# Explicit allowlist: never copy user data, .env or test reports from AiAssets.
+& robocopy "$GuiBuild/_internal" "$Target/_internal" /E /R:0 /W:0 /NFL /NDL /NJH /NJS /NP | Out-Null
+if ($LASTEXITCODE -ge 8) { throw 'GUI-Kopie fehlgeschlagen' }
+Copy-Item -LiteralPath "$GuiBuild/JobScoutAI.exe" -Destination $Target
+& robocopy "$AiAssets/runtime" "$Target/runtime" /E /R:0 /W:0 /NFL /NDL /NJH /NJS /NP | Out-Null
+if ($LASTEXITCODE -ge 8) { throw 'Laufzeit-Kopie fehlgeschlagen' }
+New-Item -ItemType Directory -Path "$Target/models", "$Target/licenses" -Force | Out-Null
+Copy-Item -LiteralPath $Model -Destination "$Target/models"
+foreach ($Name in 'THIRD_PARTY_NOTICES.md','COMPONENTS.md','PRIVACY.md','REDISTRIBUTION_TERMS.md','README_FIRST_START.txt','MODEL-PROVENANCE.json') {
+    Copy-Item -LiteralPath "$Distribution/$Name" -Destination $Target
 }
-
-$Candidate = Join-Path $BuildRoot "dist\JobScoutAI"
-if (-not (Test-Path -LiteralPath (Join-Path $Candidate "JobScoutAI.exe") -PathType Leaf)) {
-    throw "Der Build-Kandidat enthaelt keine JobScoutAI.exe."
+Copy-Item -LiteralPath "$Distribution/LICENSE-JOBSCOUT-AI.txt" -Destination "$Target/licenses"
+Get-ChildItem -LiteralPath "$Distribution/licenses" | Where-Object { $_.Name -notin 'ollama-vendor','OLLAMA-LICENSE.txt','QWEN3-APACHE-2.0.txt' } | ForEach-Object {
+    Copy-Item -LiteralPath $_.FullName -Destination "$Target/licenses" -Recurse -Force
 }
-
-if (Test-Path -LiteralPath $Target) {
-    $PublicBackup = Join-Path $Root ("Backups\PublicBuild_before_" + (Get-Date -Format "yyyyMMdd_HHmmss"))
-    Move-Item -LiteralPath $Target -Destination $PublicBackup
-}
-New-Item -ItemType Directory -Force -Path $Target | Out-Null
-robocopy $Candidate $Target /E /COPY:DAT /R:1 /W:1 /NFL /NDL /NP | Out-Null
-if ($LASTEXITCODE -gt 7) { throw "Kopieren des App-Builds ist fehlgeschlagen." }
-
-$RuntimeTarget = Join-Path $Target "runtime\ollama"
-$RuntimeLibTarget = Join-Path $RuntimeTarget "lib\ollama"
-New-Item -ItemType Directory -Force -Path $RuntimeLibTarget | Out-Null
-Copy-Item -LiteralPath $OllamaExe -Destination (Join-Path $RuntimeTarget "ollama.exe") -Force
-Get-ChildItem -LiteralPath $OllamaLib -File | ForEach-Object {
-    Copy-Item -LiteralPath $_.FullName -Destination (Join-Path $RuntimeLibTarget $_.Name) -Force
-}
-
-$ManifestData = Get-Content -LiteralPath $ModelManifest -Raw | ConvertFrom-Json
-$ModelManifestTarget = Join-Path $Target "models\manifests\registry.ollama.ai\library\qwen3"
-$ModelBlobTarget = Join-Path $Target "models\blobs"
-New-Item -ItemType Directory -Force -Path $ModelManifestTarget, $ModelBlobTarget | Out-Null
-Copy-Item -LiteralPath $ModelManifest -Destination (Join-Path $ModelManifestTarget "4b") -Force
-
-$Digests = @($ManifestData.config.digest) + @($ManifestData.layers.digest)
-foreach ($Digest in $Digests) {
-    $BlobName = $Digest -replace ":", "-"
-    $BlobSource = Join-Path (Join-Path $OllamaModelStore "blobs") $BlobName
-    if (-not (Test-Path -LiteralPath $BlobSource -PathType Leaf)) { throw "Modellbestandteil fehlt: $BlobSource" }
-    Copy-Item -LiteralPath $BlobSource -Destination (Join-Path $ModelBlobTarget $BlobName) -Force
-}
-
-$Distribution = Join-Path $Source "distribution"
-$Licenses = Join-Path $Target "licenses"
-New-Item -ItemType Directory -Force -Path $Licenses | Out-Null
-Copy-Item -LiteralPath (Join-Path $Distribution "THIRD_PARTY_NOTICES.md") -Destination $Target -Force
-Copy-Item -LiteralPath (Join-Path $Distribution "README_FIRST_START.txt") -Destination $Target -Force
-Copy-Item -LiteralPath (Join-Path $Distribution "PRIVACY.md") -Destination $Target -Force
-foreach ($Name in 'COMPONENTS.md', 'REDISTRIBUTION_TERMS.md') {
-    Copy-Item -LiteralPath (Join-Path $Distribution $Name) -Destination $Target -Force
-}
-Copy-Item (Join-Path $Distribution 'licenses\*') -Destination $Licenses -Recurse -Force
-Copy-Item -LiteralPath (Join-Path $Distribution "LICENSE-JOBSCOUT-AI.txt") -Destination $Licenses -Force
-Copy-Item -LiteralPath (Join-Path $Distribution "OLLAMA-LICENSE.txt") -Destination $Licenses -Force
-
-$QwenLicenseLayer = $ManifestData.layers | Where-Object mediaType -eq "application/vnd.ollama.image.license" | Select-Object -First 1
-if ($null -eq $QwenLicenseLayer) { throw "Das Qwen3-Modell enthaelt keinen Lizenz-Layer." }
-$QwenLicenseBlob = Join-Path (Join-Path $OllamaModelStore "blobs") ($QwenLicenseLayer.digest -replace ":", "-")
-Copy-Item -LiteralPath $QwenLicenseBlob -Destination (Join-Path $Licenses "QWEN3-APACHE-2.0.txt") -Force
-
-$PythonBase = & $Python -c "import sys; print(sys.base_prefix)"
-Copy-Item -LiteralPath (Join-Path $PythonBase "LICENSE.txt") -Destination (Join-Path $Licenses "PYTHON-LICENSE.txt") -Force
-Copy-Item -LiteralPath (Join-Path $PythonBase "tcl\tk8.6\license.terms") -Destination (Join-Path $Licenses "TCL-TK-LICENSE.txt") -Force
-Copy-Item -LiteralPath (Join-Path $Source ".venv\Lib\site-packages\customtkinter-6.0.0.dist-info\licenses\LICENSE") -Destination (Join-Path $Licenses "CUSTOMTKINTER-LICENSE.txt") -Force
-Copy-Item -LiteralPath (Join-Path $Source ".venv\Lib\site-packages\darkdetect-0.8.0.dist-info\LICENSE") -Destination (Join-Path $Licenses "DARKDETECT-LICENSE.txt") -Force
-Copy-Item -LiteralPath (Join-Path $Source ".venv\Lib\site-packages\pillow-12.3.0.dist-info\licenses\LICENSE") -Destination (Join-Path $Licenses "PILLOW-LICENSE.txt") -Force
-Copy-Item -LiteralPath (Join-Path $Source ".venv\Lib\site-packages\pyinstaller-6.21.0.dist-info\licenses\COPYING.txt") -Destination (Join-Path $Licenses "PYINSTALLER-COPYING.txt") -Force
-
-$VendorLicenseTarget = Join-Path $Licenses "ollama-vendor"
-New-Item -ItemType Directory -Force -Path $VendorLicenseTarget | Out-Null
-Get-ChildItem -LiteralPath $OllamaLib -File | Where-Object Name -Match "LICENSE|COPYING|NOTICE" | ForEach-Object {
-    Copy-Item -LiteralPath $_.FullName -Destination (Join-Path $VendorLicenseTarget $_.Name) -Force
-}
-
-$ConfigText = Get-Content -LiteralPath (Join-Path $Source "config.py") -Raw
-$VersionMatch = [regex]::Match($ConfigText, '(?m)^VERSION\s*=\s*"([^"]+)"')
-if (-not $VersionMatch.Success) { throw "VERSION konnte nicht aus Source/config.py gelesen werden." }
-$Version = $VersionMatch.Groups[1].Value
+if (-not (Test-Path -LiteralPath "$Target/licenses/GEMMA4_E2B_LICENSE.txt")) { throw 'Gemma-Lizenz fehlt' }
 $BuildInfo = @"
 JobScout AI Portable $Version
-Build date: $(Get-Date -Format "yyyy-MM-dd HH:mm:ss K")
-Architecture: Windows x64, CPU-compatible Ollama runtime
-Local model: qwen3:4b (Q4_K_M, fully bundled)
+Build date: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss K')
+Architecture: Windows x64, llama.cpp Vulkan with CPU startup fallback
+Local model: Gemma 4 E2B IT Q4_K_M (fully bundled)
+Warmup: background model load and small inference at startup
+Analysis: all selected jobs screened, detail conclusions on up to 15 candidates
+Appearance: static frosted glass surfaces, no live blur
 Personal data and API keys: not included
 "@
-Set-Content -LiteralPath (Join-Path $Target "BUILD-INFO.txt") -Value $BuildInfo -Encoding UTF8
-
-$ChecksumFiles = @(
-    Join-Path $Target "JobScoutAI.exe"
-    Join-Path $RuntimeTarget "ollama.exe"
-    Join-Path $ModelManifestTarget "4b"
-) + ($Digests | ForEach-Object { Join-Path $ModelBlobTarget ($_ -replace ":", "-") })
-$ChecksumLines = foreach ($File in $ChecksumFiles) {
-    $Hash = Get-FileHash -LiteralPath $File -Algorithm SHA256
-    $Relative = [IO.Path]::GetRelativePath($Target, $File)
-    "$($Hash.Hash.ToLowerInvariant())  $Relative"
+Set-Content -LiteralPath "$Target/BUILD-INFO.txt" -Value $BuildInfo -Encoding utf8
+$Hashes = foreach ($File in @((Get-Item "$Target/JobScoutAI.exe")) + @(Get-ChildItem "$Target/runtime" -File -Recurse) + @((Get-Item "$Target/models/$($Provenance.file)"))) {
+    $Relative = [IO.Path]::GetRelativePath($Target, $File.FullName)
+    $Hash = if ($Relative -eq ('models\' + $Provenance.file)) { $Provenance.sha256 } else { (Get-FileHash -LiteralPath $File.FullName -Algorithm SHA256).Hash.ToLowerInvariant() }
+    "$Hash  $Relative"
 }
-Set-Content -LiteralPath (Join-Path $Target "CHECKSUMS-SHA256.txt") -Value $ChecksumLines -Encoding ASCII
-
-& $Python (Join-Path $Source "developer_tools\audit_public_credentials.py") $Target
-if ($LASTEXITCODE -ne 0) { throw "Zugangsdaten-Pruefung fehlgeschlagen; Build darf nicht weitergegeben werden." }
-if (Get-ChildItem -LiteralPath (Join-Path $Target "data") -Recurse -File -ErrorAction SilentlyContinue) {
-    throw "Der oeffentliche Build enthaelt unerwartete Nutzerdaten."
-}
-
-$Size = (Get-ChildItem -LiteralPath $Target -Recurse -File | Measure-Object Length -Sum).Sum
-Write-Host "Standalone-Build erstellt:"
-Write-Host $Target
-Write-Host ("Groesse: {0:N2} GB" -f ($Size / 1GB))
+Set-Content -LiteralPath "$Target/CHECKSUMS-SHA256.txt" -Value $Hashes -Encoding ascii
+& $Python "$Source/developer_tools/audit_public_credentials.py" $Target
+if ($LASTEXITCODE -ne 0) { throw 'Zugangsdatenprüfung fehlgeschlagen' }
+if ((Test-Path -LiteralPath "$Target/.env") -or (Get-ChildItem "$Target/data" -Recurse -File -ErrorAction SilentlyContinue)) { throw 'Unerwartete persönliche Dateien im Build' }
+Write-Output "Sauberer portabler Build: $Target"
+exit 0

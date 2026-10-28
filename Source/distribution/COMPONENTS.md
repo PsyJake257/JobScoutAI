@@ -1,6 +1,6 @@
 # Komponenten und Herkunft
 
-Bestand der Windows-x64-Ausgabe, geprüft am 21.10.2026. Die App-Version steht
+Bestand der Windows-x64-Ausgabe, aktualisiert am 28.10.2026. Die App-Version steht
 in `BUILD-INFO.txt`; im Quellcode ist ausschließlich `Source/config.py`
 maßgeblich. Die unten genannten Komponenten wurden nicht für JobScout AI
 inhaltlich verändert; Verpackung und Auswahl von CPU-Dateien sind angepasst.
@@ -8,8 +8,8 @@ inhaltlich verändert; Verpackung und Auswahl von CPU-Dateien sind angepasst.
 | Komponente | Version/Artefakt | Lizenz / Originalquelle |
 | --- | --- | --- |
 | JobScout AI | siehe BUILD-INFO | MIT, https://github.com/PsyJake257/JobScoutAI |
-| Qwen3-4B | qwen3:4b, Q4_K_M | Apache-2.0, https://huggingface.co/Qwen/Qwen3-4B ; https://ollama.com/library/qwen3:4b |
-| Ollama | 0.40.6, CPU-Dateien | MIT, https://github.com/ollama/ollama |
+| Gemma 4 E2B IT | GGUF Q4_K_M; Revision und SHA-256 in MODEL-PROVENANCE.json | Apache-2.0, https://ai.google.dev/gemma/docs/core/model_card_4 ; https://huggingface.co/unsloth/gemma-4-E2B-it-GGUF |
+| llama.cpp / ggml | mitgelieferte CPU-/Vulkan-Binärdateien, durch SHA-256 identifiziert | MIT, https://github.com/ggml-org/llama.cpp |
 | Python | 3.12.14, x64 | PSF und enthaltene Fremdhinweise, https://www.python.org/ ; https://docs.python.org/3.12/license.html |
 | Tcl/Tk | 8.6 | mitgelieferte license.terms, https://www.tcl-lang.org/ |
 | CustomTkinter | 6.0.0 | MIT, https://github.com/TomSchimansky/CustomTkinter |
@@ -19,16 +19,15 @@ inhaltlich verändert; Verpackung und Auswahl von CPU-Dateien sind angepasst.
 | Roboto | mit CustomTkinter gelieferte statische Fonts | Apache-2.0, Copyright 2011 Google Inc., https://github.com/googlefonts/roboto |
 | OpenSSL | 3.5.8 | Apache-2.0, https://github.com/openssl/openssl/tree/openssl-3.5.8 |
 | libffi, Expat, zlib, XZ/liblzma | mit Python gelieferte Bibliotheken | Originaltexte in licenses und Python-Fremdhinweisen |
-| LLVM libc++, libunwind, OpenMP | mit Ollama gelieferte DLLs | Apache-2.0 mit LLVM-Ausnahmen, https://github.com/llvm/llvm-project |
-| MinGW-w64/winpthreads | mit Ollama gelieferte libwinpthread-1.dll | Originaltext WINPTHREADS-LICENSE.txt, https://github.com/mingw-w64/mingw-w64 |
-| llama.cpp, ggml und weitere Ollama-Abhängigkeiten | mit Ollama ausgeliefert | vollständige Originalhinweise unter licenses/ollama-vendor |
+| LLVM/OpenMP | mit llama.cpp gelieferte Bibliotheken | Apache-2.0 mit LLVM-Ausnahmen, licenses/LLVM-LICENSE.txt ; https://github.com/llvm/llvm-project |
+| cpp-httplib | in llama.cpp enthalten | MIT, licenses/CPP_HTTPLIB_LICENSE.txt ; https://github.com/yhirose/cpp-httplib |
 | Microsoft C-Laufzeit | mit Python gelieferte Windows-DLLs | zusätzliche Bedingungen in PYTHON-LICENSE.txt und REDISTRIBUTION_TERMS.md |
 | PyInstaller-Bootloader | 6.21.0 | GPL-2.0 mit Bootloader-Ausnahme, https://pyinstaller.org/en/stable/license.html |
 
 Die jeweiligen Unterversionen der nativen Fremdbibliotheken sind, soweit vom
 Lieferanten angegeben, in dessen Lizenzsammlungen dokumentiert; nicht aus
 Dateinamen abgeleitete Versionsnummern werden hier nicht behauptet.
-`CHECKSUMS-SHA256.txt` identifiziert EXE, Ollama und die konkreten Modell-Blobs.
+`CHECKSUMS-SHA256.txt` identifiziert EXE, Laufzeitdateien und das konkrete GGUF.
 Supplementäre Lizenztexte stammen aus den offiziellen Projekten; die
 Python-Sammelhinweise liegen zusätzlich als lokal lesbare HTML-Datei vor.
 
